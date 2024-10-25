@@ -1,9 +1,12 @@
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import WordCompleter
 import can
+from can import CanError, Message
 from enum import Enum
 import time
 from typing import Optional
+from motor_commands import MotorCommands
+from typing import Dict
 
 # Configuration
 CAN_CHANNEL = 'can0'
@@ -16,18 +19,11 @@ COMMON_MESSAGE_ID = 0x000
 COMMON_RESPONSE_ID = 0x100
 MODULE_ID_MASK = 0xFF
 
-class Parameter(str, Enum):
-    SPEED = "speed"
-    POSITION = "position"
-    ACCELERATION = "acceleration"
 
-
-
-
-def setup_can_interface() -> Optional[can.Bus]:
+def setup_can_interface() -> Optional[can.BusABC]:
     """Set up the CAN interface"""
     try:
-        bus = can.interface.Bus(
+        bus: can.BusABC = can.Bus(
             channel=CAN_CHANNEL,
             interface='socketcan',
             fd=True,
@@ -37,50 +33,32 @@ def setup_can_interface() -> Optional[can.Bus]:
         print(f"Successfully configured {CAN_CHANNEL} for CANFD")
         print(f"Bitrate: {CAN_BITRATE / 1_000_000}Mbps, Data Bitrate: {CAN_DATA_BITRATE / 1_000_000}Mbps")
         return bus
-    except can.CanError as e:
+    except CanError as e:
         print(f"Error setting up CAN interface: {e}")
         return None
 
 
 class MotorController:
+    motor_commands: MotorCommands
     def __init__(self):
         self.bus = setup_can_interface()
         self.session = PromptSession()
         
         # Setting up command completion
+        self.motor_commands = MotorCommands(self.bus)
 
         self.commands = WordCompleter([
+            'online', 'state',
             'set', 'get', 'monitor', 'status', 'help', 'exit',
             'speed', 'position', 'acceleration'
         ])
 
-    def set_parameter(self, motor_id: int, parameter: str, value: int):
-        """Set the parameter value for a motor"""
-        try:
-            command_id = COMMAND_ID_BASE | (motor_id & MODULE_ID_MASK)
-            msg = can.Message(
-                arbitration_id=command_id,
-                is_fd=True,
-                is_extended_id=False,
-                data=[
-                    ord(parameter[0]),
-                    (value >> 24) & 0xFF,
-                    (value >> 16) & 0xFF,
-                    (value >> 8) & 0xFF,
-                    value & 0xFF
-                ]
-            )
-            self.bus.send(msg)
-            print(f"Set {parameter} = {value} for motor ID {motor_id}")
-            
-            response = self.bus.recv(timeout=1.0)
-            if response:
-                print("Response received")
-            else:
-                print("No response received")
-                
-        except can.CanError as e:
-            print(f"Error sending CAN message: {e}")
+    def handle_response(self, response: Optional[Dict]) -> None:
+        """ Display the response """
+        if response:
+            print(self.motor_commands.format_response(response))
+        else:
+            print("No response received")
 
     def monitor(self, duration: int = 10):
         """ Monitor CAN bus traffic """
@@ -95,7 +73,7 @@ class MotorController:
                     
         except KeyboardInterrupt:
             print("\nMonitoring stopped by user")
-        except can.CanError as e:
+        except CanError as e:
             print(f"Error monitoring CAN bus: {e}")
 
     def show_help(self):
@@ -157,11 +135,31 @@ class MotorController:
                     parameter = parts[2]
                     value = int(parts[3])
                     
-                    if parameter not in [p.value for p in Parameter]:
-                        print(f"Invalid parameter. Available parameters: {[p.value for p in Parameter]}")
+                    response = self.motor_commands.set_parameter(motor_id, parameter, value)
+                    self.handle_response(response)
+
+                elif cmd == 'get':
+                    if len(parts) != 3:
+                        print("Usage: get <motor_id> <parameter>")
                         continue
-                        
-                    self.set_parameter(motor_id, parameter, value)
+                    motor_id = int(parts[1])
+                    parameter = parts[2]
+                    response = self.motor_commands.get_parameter(motor_id, parameter)
+                    self.handle_response(response)
+                elif cmd == 'online':
+                    if len(parts) != 2:
+                        print("Usage: online <motor_id>")
+                        continue
+                    # motor_id は hex で入力される
+                    motor_id = int(parts[1], 16)
+                    self.motor_commands.iap_update(motor_id)
+                elif cmd == 'state':
+                    if len(parts) != 2:
+                        print("Usage: state <motor_id>")
+                        continue
+                    motor_id = int(parts[1], 16)
+                    response = self.motor_commands.get_current_state(motor_id)
+                    self.handle_response(response)
                     
                 else:
                     print(f"Unknown command: {cmd}")
