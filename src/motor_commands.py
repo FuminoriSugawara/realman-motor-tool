@@ -1,6 +1,5 @@
 from enum import IntEnum, Enum
 from typing import Dict, Optional
-import time
 import can
 
 class CommandMessageType(IntEnum):
@@ -267,32 +266,6 @@ class MotorCommands:
             data=data
         )
         self.bus.send(msg)
-
-
-    
-    #def send_and_receive(self, command_id: int, data: list[int], timeout: float = 1.0) -> Optional[Dict]:
-    #    """Send a message and wait for response
-    #    
-    #    Args:
-    #        command_id: Command identifier
-    #        data: Message data bytes
-    #        timeout: Response timeout in seconds
-    #        
-    #    Returns:
-    #        Decoded response message or None if no response received
-    #    """
-    #    try:
-    #        self.send_message(command_id, data)
-    #        # wait 1ms for response
-
-    #        time.sleep(0.0001)
-    #        response = self.bus.recv(timeout=timeout)
-    #        if response:
-    #            return self.decode_response(response)
-    #        return None
-    #    except Exception as e:
-    #        print(f"Error in send_and_receive: {e}")
-    #        return None
 
 
     

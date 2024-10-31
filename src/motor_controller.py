@@ -3,8 +3,6 @@ from prompt_toolkit.completion import WordCompleter, NestedCompleter
 from prompt_toolkit.patch_stdout import patch_stdout
 from prompt_toolkit.application import create_app_session
 import can
-from can import CanError, Message
-from enum import Enum
 import time
 from typing import Optional
 from motor_commands import MotorCommands
@@ -40,7 +38,7 @@ def setup_can_interface() -> Optional[can.BusABC]:
         print("type 'help' for available commands")
 
         return bus
-    except CanError as e:
+    except can.CanError as e:
         print(f"Error setting up CAN interface: {e}")
         return None
 
@@ -196,7 +194,7 @@ class MotorController:
                     
         except KeyboardInterrupt:
             print("\nMonitoring stopped by user")
-        except CanError as e:
+        except can.CanError as e:
             print(f"Error monitoring CAN bus: {e}")
 
     def show_help(self):
