@@ -202,14 +202,15 @@ class MotorController:
     def show_help(self):
         """ Show available commands """
         print("\nAvailable commands:")
-        print("  online <motor_id>                  - Enter online mode")
+        print("  online <motor_id>                   - Enter online mode")
         print("  set <motor_id> <parameter> <value>  - Set parameter value")
-        print("  get <motor_id> <parameter>         - Get parameter value")
-        print("  monitor [duration]                 - Monitor CAN traffic")
-        print("  parameters                        - List available parameters")
-        print("  status                            - Show CAN interface status")
-        print("  help                              - Show this help")
-        print("  exit                              - Exit the program")
+        print("  get <motor_id> <parameter>          - Get parameter value")
+        print("  state <motor_id>                    - Get current state")
+        print("  monitor [duration]                  - Monitor CAN traffic")
+        print("  parameters                          - List available parameters")
+        print("  status                              - Show CAN interface status")
+        print("  help                                - Show this help")
+        print("  exit                                - Exit the program")
     
     def list_parameters(self):
         """ List available parameters """
