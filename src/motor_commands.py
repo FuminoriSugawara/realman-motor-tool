@@ -136,10 +136,115 @@ WRITABLE_PARAMETERS = [
     CommandIndex.TAG_SPEED_H,
 ]
 
+# 読み書き可能なパラメータ名のリスト
+PARAMETERS = [
+    "SYS_ID",
+    "SYS_FW_VERSION",
+    "SYS_ERROR",
+    "SYS_VOLTAGE",
+    "SYS_TEMP",
+    "SYS_REDU_RATIO",
+    "SYS_ENABLE_DRIVER",
+    "SYS_ENABLE_ON_POWER",
+    "SYS_SAVE_TO_FLASH",
+    "SYS_ABSOLUTE_POS_AUTO_CALIB",
+    "SYS_SET_ZERO_POS",
+    "SYS_CLEAR_ERROR",
+    "CUR_CURRENT",
+    "CUR_SPEED",
+    "CUR_POSITION",
+    "MOT_MODEL_ID0",
+    "MOT_MODEL_ID1",
+    "MOT_MODEL_ID2",
+    "MOT_MODEL_ID3",
+    "MOT_MODEL_ID4",
+    "MOT_MODEL_ID5",
+    "TAG_WORK_MODE",
+    "TAG_CURRENT",
+    "TAG_SPEED",
+    "TAG_POSITION",
+    "SPEED_FEED_FORWARD_SWITCH",
+    "LIT_MAX_CURRENT",
+    "LIT_MAX_SPEED",
+    "LIT_MAX_ACC",
+    "LIT_MAX_DEC",
+    "LIT_MIN_POSITION",
+    "LIT_MAX_POSITION",
+    "IAP_FLAG",
+    "SEV_CURRENT_P",
+    "SEV_CURRENT_I",
+    "SEV_CURRENT_D",
+    "SEV_SPEED_P",
+    "SEV_SPEED_I",
+    "SEV_SPEED_D",
+    "SEV_SPEED_DS",
+    "SEV_POSITION_P",
+    "SEV_POSITION_I",
+    "SEV_POSITION_D",
+    "SEV_POSITION_DS",
+    "ERROR"
+]
 
 
+# 4バイトのパラメータ名のリスト
+FOUR_BYTE_PARAMETERS = [
+    "CUR_CURRENT",
+    "CUR_SPEED",
+    "CUR_POSITION",
+    "TAG_CURRENT",
+    "TAG_SPEED",
+    "TAG_POSITION",
+    "LIT_MIN_POSITION",
+    "LIT_MAX_POSITION"
+]
 
-
+PARAMTETER_DESCRIPTIONS = {
+    "SYS_ID": "System ID",
+    "SYS_FW_VERSION": "Firmware version",
+    "SYS_ERROR": "Error code",
+    "SYS_VOLTAGE": "System voltage (V)",
+    "SYS_TEMP": "System temperature (°C)",
+    "SYS_REDU_RATIO": "Reduction ratio",
+    "SYS_ENABLE_DRIVER": "Enable driver",
+    "SYS_ENABLE_ON_POWER": "Enable on power",
+    "SYS_SAVE_TO_FLASH": "Save to flash",
+    "SYS_ABSOLUTE_POS_AUTO_CALIB": "Absolute position auto calibration",
+    "SYS_SET_ZERO_POS": "Set zero position",
+    "SYS_CLEAR_ERROR": "Clear error",
+    "CUR_CURRENT": "Current (mA)",
+    "CUR_SPEED": "Speed (RPM)",
+    "CUR_POSITION": "Position (deg)",
+    "MOT_MODEL_ID0": "Motor model ID 0",
+    "MOT_MODEL_ID1": "Motor model ID 1",
+    "MOT_MODEL_ID2": "Motor model ID 2",
+    "MOT_MODEL_ID3": "Motor model ID 3",
+    "MOT_MODEL_ID4": "Motor model ID 4",
+    "MOT_MODEL_ID5": "Motor model ID 5",
+    "TAG_WORK_MODE": "Target work mode",
+    "TAG_CURRENT": "Target current (mA)",
+    "TAG_SPEED": "Target speed (RPM)",
+    "TAG_POSITION": "Target position (deg)",
+    "SPEED_FEED_FORWARD_SWITCH": "Speed feed forward switch",
+    "LIT_MAX_CURRENT": "Limit max current (mA)",
+    "LIT_MAX_SPEED": "Limit max speed (RPM)",
+    "LIT_MAX_ACC": "Limit max acceleration (RPM/s)",
+    "LIT_MAX_DEC": "Limit max deceleration (RPM/s)",
+    "LIT_MIN_POSITION": "Limit min position (deg)",
+    "LIT_MAX_POSITION": "Limit max position (deg)",
+    "IAP_FLAG": "IAP flag",
+    "SEV_CURRENT_P": "Servo current P",
+    "SEV_CURRENT_I": "Servo current I",
+    "SEV_CURRENT_D": "Servo current D",
+    "SEV_SPEED_P": "Servo speed P",
+    "SEV_SPEED_I": "Servo speed I",
+    "SEV_SPEED_D": "Servo speed D",
+    "SEV_SPEED_DS": "Servo speed DS",
+    "SEV_POSITION_P": "Servo position P",
+    "SEV_POSITION_I": "Servo position I",
+    "SEV_POSITION_D": "Servo position D",
+    "SEV_POSITION_DS": "Servo position DS",
+    "ERROR": "Error"
+}
 
 
 
@@ -150,6 +255,8 @@ class MotorCommands:
     def __init__(self, bus: can.BusABC):
         self.bus = bus
     
+
+
     def send_message(self, command_id: int, data: list[int]) -> None:
         data = bytes(data)
         """Send a message"""
@@ -160,30 +267,34 @@ class MotorCommands:
             data=data
         )
         self.bus.send(msg)
-    
-    def send_and_receive(self, command_id: int, data: list[int], timeout: float = 1.0) -> Optional[Dict]:
-        """Send a message and wait for response
-        
-        Args:
-            command_id: Command identifier
-            data: Message data bytes
-            timeout: Response timeout in seconds
-            
-        Returns:
-            Decoded response message or None if no response received
-        """
-        try:
-            self.send_message(command_id, data)
-            # wait 1ms for response
 
-            time.sleep(0.0001)
-            response = self.bus.recv(timeout=timeout)
-            if response:
-                return self.decode_response(response)
-            return None
-        except Exception as e:
-            print(f"Error in send_and_receive: {e}")
-            return None
+
+    
+    #def send_and_receive(self, command_id: int, data: list[int], timeout: float = 1.0) -> Optional[Dict]:
+    #    """Send a message and wait for response
+    #    
+    #    Args:
+    #        command_id: Command identifier
+    #        data: Message data bytes
+    #        timeout: Response timeout in seconds
+    #        
+    #    Returns:
+    #        Decoded response message or None if no response received
+    #    """
+    #    try:
+    #        self.send_message(command_id, data)
+    #        # wait 1ms for response
+
+    #        time.sleep(0.0001)
+    #        response = self.bus.recv(timeout=timeout)
+    #        if response:
+    #            return self.decode_response(response)
+    #        return None
+    #    except Exception as e:
+    #        print(f"Error in send_and_receive: {e}")
+    #        return None
+
+
     
     def decode_response(self, msg: can.Message) -> Dict:
         """Decode response message
@@ -220,6 +331,8 @@ class MotorCommands:
                 'module_id': msg.arbitration_id & 0xFF,
                 'data': {'error': str(e)}
             }
+
+
 
     def _decode_common_response(self, data: bytes) -> Dict:
         """Decode common command response
@@ -273,8 +386,6 @@ class MotorCommands:
                 }
 
 
-
-
         
 
     def _decode_servo_response(self, data: bytes) -> Dict:
@@ -291,6 +402,8 @@ class MotorCommands:
             'servo_mode': ServoMode(data[1]) if len(data) > 1 else None,
             'params': data[2:] if len(data) > 2 else None
         }
+
+
 
     def _decode_joint_state_response(self, data: bytes) -> Dict:
         """Decode joint state response"""
@@ -314,6 +427,7 @@ class MotorCommands:
         }
 
 
+
     def _decode_debug_response(self, data: bytes) -> Dict:
         """Decode debug information response
         
@@ -326,6 +440,8 @@ class MotorCommands:
         return {
             'debug_data': list(data)
         }
+
+
 
     def format_response(self, response: Dict) -> str:
         """Format response data as human-readable string
@@ -374,6 +490,8 @@ class MotorCommands:
         output.append("===================\n")
         return "\n".join(output)
 
+
+
     def monitor_messages(self, callback, timeout: float = 0.1) -> None:
         """Monitor and process incoming messages
         
@@ -389,6 +507,8 @@ class MotorCommands:
         except Exception as e:
             print(f"Error in monitor_messages: {e}")
     
+
+
     def iap_update(self, module_id: int) -> Optional[Dict]:
         """IAP update"""
         command_id = CommandMessageType.COMMON | module_id
@@ -396,7 +516,9 @@ class MotorCommands:
             CommandType.CMD_WR,
             CommandIndex.IAP_FLAG,
             0x00]
-        return self.send_and_receive(command_id, data)
+        self.send_message(command_id, data)
+
+
     
     def get_parameter(self, module_id: int, parameter: str) -> Optional[Dict]:
         size = 0x01
@@ -426,21 +548,14 @@ class MotorCommands:
             command_index,
             size
         ]
-        
-        return self.send_and_receive(command_id, data)
+
+        self.send_message(command_id, data)
+
+
 
     def set_parameter(self, module_id: int, parameter: str, value: int) -> Optional[Dict]:
         size = 1
-        if parameter in [
-            "CUR_CURRENT",
-            "CUR_SPEED",
-            "CUR_POSITION",
-            "TAG_CURRENT",
-            "TAG_SPEED",
-            "TAG_POSITION",
-            "LIT_MIN_POSITION",
-            "LIT_MAX_POSITION"
-        ]:
+        if parameter in FOUR_BYTE_PARAMETERS:
             parameter = parameter + "_L"
             size = 4
         
@@ -460,7 +575,7 @@ class MotorCommands:
         value_bytes = value.to_bytes(size, byteorder='little', signed=True)
         data.extend(value_bytes)
         
-        return self.send_and_receive(command_id, data)
+        self.send_message(command_id, data)
 
 
 
@@ -468,6 +583,17 @@ class MotorCommands:
         """Get current state"""
         command_id = CommandMessageType.JSTATE | module_id
         data = []
-        return self.send_and_receive(command_id, data)
+        self.send_message(command_id, data)
     
+
+    def get_available_parameters(self) -> list[str]:
+        # return parameter names and descriptions
+        parameters_list = []
+        for param in PARAMETERS:
+            description = PARAMTETER_DESCRIPTIONS[param]
+            parameters_list.append(f"{param}: {description}")
+
+        return parameters_list
+
+
         
