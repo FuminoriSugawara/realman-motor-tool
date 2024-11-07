@@ -179,6 +179,11 @@ class UnitScaleFactor(float, Enum):
     CURRENT_MODEL60 = 2.0 # mA
     CURRENT_FEEDFORWARD = 2.0 # mA
 
+class MotorModel(IntEnum):
+    WHJ10 = 10
+    WHJ30 = 30
+    WHJ60 = 60
+
 
 # 書き込み可能なパラメータのリスト
 WRITABLE_PARAMETERS = [
@@ -310,13 +315,22 @@ PARAMTETER_DESCRIPTIONS = {
 
 class MotorCommands:
     bus: can.BusABC
+    motor_model_map: Dict[int, MotorModel]
+
     # can.BusABC をコンストラクタで受け取る
-    def __init__(self, bus: can.BusABC):
+    # 対象となるモーターのIDとそのモデルのマップを保持する(オプション)
+    def __init__(self, bus: can.BusABC, motor_model_map: Dict[int, MotorModel] = {}):
         self.bus = bus
+        self.motor_model_map = motor_model_map
 
     @staticmethod
     def parse_int32(data: bytes) -> int:
         return struct.unpack('<i', data)[0]
+    
+    @staticmethod
+    def parse_uint16(data: bytes) -> int:
+        return struct.unpack('<H', data)[0]
+    
     
 
 
@@ -376,6 +390,19 @@ class MotorCommands:
                 'module_id': msg.arbitration_id & 0xFF,
                 'data': {'error': str(e)}
             }
+    
+    
+    def _get_current_unit_scale_factor(self, module_id: int) -> float:
+        """Get the current unit scale factor for the specified module"""
+        if module_id in self.motor_model_map:
+            model_id = self.motor_model_map[module_id]
+            if model_id == MotorModel.WHJ10:
+                return UnitScaleFactor.CURRENT_MODEL10.value
+            elif model_id == MotorModel.WHJ30:
+                return UnitScaleFactor.CURRENT_MODEL30.value
+            elif model_id == MotorModel.WHJ60:
+                return UnitScaleFactor.CURRENT_MODEL60.value
+        return UnitScaleFactor.CURRENT_MODEL10.value
 
 
 
@@ -407,7 +434,7 @@ class MotorCommands:
                 value = value_raw * UnitScaleFactor.TEMPERATURE
                 unit = "°C"
             elif command_index == CommandIndex.CUR_CURRENT_L:
-                value = value_raw * UnitScaleFactor.CURRENT_MODEL10 
+                value = value_raw * self._get_current_unit_scale_factor(module_id) 
                 unit = "mA"
             elif command_index == CommandIndex.CUR_SPEED_L:
                 value = value_raw * UnitScaleFactor.ACTUAL_SPEED
@@ -416,7 +443,7 @@ class MotorCommands:
                 value = value_raw * UnitScaleFactor.POSITION
                 unit = "deg"
             elif command_index == CommandIndex.TAG_CURRENT_L:
-                value = value_raw * UnitScaleFactor.CURRENT_MODEL10
+                value = value_raw * self._get_current_unit_scale_factor(module_id)
                 unit = "mA"
             elif command_index == CommandIndex.TAG_SPEED_L:
                 value = value_raw * UnitScaleFactor.TARGET_SPEED
@@ -449,6 +476,7 @@ class MotorCommands:
         """
         message_type = message.arbitration_id & 0xFF00
         module_id = message.arbitration_id & 0xFF
+        timestamp = message.timestamp
         data = message.data
         current = self.parse_int32(data[0:4])
         velocity = self.parse_int32(data[4:8])
@@ -458,9 +486,10 @@ class MotorCommands:
         return ServoResponseMessage(
             message_type=message_type,
             module_id=module_id,
-            current=current,
-            velocity=velocity,
-            position=position,
+            timestamp=timestamp,
+            current=current * self._get_current_unit_scale_factor(module_id),
+            velocity=velocity * UnitScaleFactor.ACTUAL_SPEED,
+            position=position * UnitScaleFactor.POSITION,
             error=error
         )
         
@@ -495,7 +524,7 @@ class MotorCommands:
             enable_state=enable_state,
             brake_state=brake_state,
             position=position_raw * UnitScaleFactor.POSITION,
-            current=current_raw * UnitScaleFactor.CURRENT_MODEL10
+            current=current_raw * self._get_current_unit_scale_factor(module_id)
         )
         
 

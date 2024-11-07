@@ -7,11 +7,12 @@ import time
 from typing import Optional, Dict
 from queue import Queue, Empty
 import threading
-from motor_commands import MotorCommands
+from motor_commands import MotorCommands, MotorModel
 import os
 import csv
 from datetime import datetime
 from collections import defaultdict
+from motor_logger import MotorLogger
 
 # Configuration
 CAN_CHANNEL = 'can0'
@@ -23,6 +24,16 @@ CONTROL_RESPONSE_ID_BASE = 0x500
 COMMON_MESSAGE_ID = 0x000
 COMMON_RESPONSE_ID = 0x100
 MODULE_ID_MASK = 0xFF
+
+motor_model_map: Dict[int, MotorModel] = {
+    0x01: MotorModel.WHJ60,
+    0x02: MotorModel.WHJ30,
+    0x03: MotorModel.WHJ30,
+    0x04: MotorModel.WHJ10,
+    0x05: MotorModel.WHJ10,
+    0x06: MotorModel.WHJ10,
+    0x07: MotorModel.WHJ10,
+}
 
 
 def setup_can_interface() -> Optional[can.BusABC]:
@@ -53,16 +64,9 @@ class MotorController:
             raise Exception("Failed to initialize CAN interface")
 
         self.session = PromptSession()
-        self.motor_commands = MotorCommands(self.bus)
+        self.motor_commands = MotorCommands(self.bus, motor_model_map)
         self.message_queue = Queue()
-        
-        # Logging related attributes
-        self.start_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.command_counts = defaultdict(int)
-        self.response_counts = defaultdict(int)
-        self.accumulated_stats = defaultdict(lambda: defaultdict(lambda: {'commands_sent': 0, 'responses_received': 0}))
-        self.current_second = 0
-        self.last_stats_time = time.time()
+        self.motor_logger = MotorLogger()
         
         self.running = False
         self.show_response = False
@@ -80,70 +84,10 @@ class MotorController:
                 msg = self.bus.recv(timeout=0.1)
                 if msg:
                     self.message_queue.put(msg)
-                    if self.logging_mode:
-                        self._process_log_message(msg)
             except Exception as e:
                 print(f"Error receiving message: {e}")
 
-    def _process_log_message(self, message):
-        """Process message for logging statistics"""
-        command_id = message.arbitration_id & 0xFF00
-        module_id = message.arbitration_id & MODULE_ID_MASK
-        
-        if command_id == COMMAND_ID_BASE:
-            self.command_counts[module_id] += 1
-        elif command_id == CONTROL_RESPONSE_ID_BASE:
-            self.response_counts[module_id] += 1
-        elif command_id == COMMON_MESSAGE_ID:
-            self.command_counts[module_id] += 1
-        elif command_id == COMMON_RESPONSE_ID:
-            self.response_counts[module_id] += 1
-
-        current_time = time.time()
-        if current_time - self.last_stats_time >= 1:
-            self._save_current_stats()
-            self.last_stats_time = current_time
-            self.current_second += 1
-
-    def _save_current_stats(self):
-        """Save current statistics to accumulated stats"""
-        all_module_ids = set(self.command_counts.keys()) | set(self.response_counts.keys())
-        
-        print(f"\nSecond {self.current_second} statistics:")
-        for module_id in sorted(all_module_ids):
-            self.accumulated_stats[self.current_second][module_id] = {
-                'commands_sent': self.command_counts[module_id],
-                'responses_received': self.response_counts[module_id]
-            }
-            print(f"Motor ID {module_id}: Commands sent: {self.command_counts[module_id]}, "
-                  f"Responses received: {self.response_counts[module_id]}")
-        
-        # Reset counters
-        self.command_counts.clear()
-        self.response_counts.clear()
-
-    def save_stats_to_csv(self):
-        """Save accumulated statistics to CSV file"""
-        output_dir = 'can_output'
-        os.makedirs(output_dir, exist_ok=True)
-        filename = os.path.join(output_dir, f'{self.start_timestamp}_stats.csv')
-        
-        with open(filename, 'w', newline='') as csvfile:
-            fieldnames = ['second', 'motor_id', 'commands_sent', 'responses_received']
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
-            
-            for second, motor_stats in self.accumulated_stats.items():
-                for motor_id, data in motor_stats.items():
-                    writer.writerow({
-                        'second': second,
-                        'motor_id': motor_id,
-                        'commands_sent': data['commands_sent'],
-                        'responses_received': data['responses_received']
-                    })
-        
-        print(f"Stats saved to {filename}")
-
+    
     def _process_messages(self):
         """Process messages from the queue"""
         while self.running:
@@ -152,6 +96,8 @@ class MotorController:
                 response = self.motor_commands.decode_response(msg)
                 if self.show_response:
                     self._console_print_response(response)
+                if self.logging_mode:
+                    self.motor_logger.log(response)
             except Empty:
                 continue
             except Exception as e:
@@ -174,21 +120,19 @@ class MotorController:
         if cmd == 'exit':
             self.running = False
             if self.logging_mode:
-                self.save_stats_to_csv()
+                self.motor_logger.save_to_csv()
             return
 
         elif cmd == 'startlog':
             self.logging_mode = True
-            self.start_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            self.current_second = 0
-            self.last_stats_time = time.time()
+            self.motor_logger.clear()
             print("Started logging CAN messages")
             return
 
         elif cmd == 'stoplog':
             if self.logging_mode:
                 self.logging_mode = False
-                self.save_stats_to_csv()
+                self.motor_logger.save_to_csv()
                 print("Stopped logging and saved statistics")
             else:
                 print("Logging was not active")
