@@ -78,6 +78,11 @@ pip install -r requirements.txt
 モーター1をブレーキ状態にする場合は、`set 1 SYS_ENABLE_DRIVER 0`を入力します。  
 モーター1のブレーキ状態を解除する場合は、`set 1 SYS_ENABLE_DRIVER 1`を入力します。
 
+## モーターの制御指令値と制御応答レスポンスのCSV保存
+
+制御指令値と制御応答レスポンスをCSV保存する場合は、 `startlog`を入力します。
+その後、`stoplog`を入力すると、can_outputディレクトリにCSVファイルが出力されます。
+
 
 ## ツールの終了
 
