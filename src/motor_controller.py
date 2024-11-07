@@ -149,19 +149,22 @@ class MotorController:
         while self.running:
             try:
                 msg = self.message_queue.get(timeout=0.1)
+                response = self.motor_commands.decode_response(msg)
                 if self.show_response:
-                    response = self.motor_commands.decode_response(msg)
-                    self._handle_response(response)
+                    self._console_print_response(response)
             except Empty:
                 continue
             except Exception as e:
                 print(f"Error processing message: {e}")
 
-    def _handle_response(self, response: Optional[Dict]) -> None:
+    def _console_print_response(self, response: Dict) -> None:
         """Display the response"""
         if response:
-            print(f"\n{self.motor_commands.format_response(response)}")
-            print("motor> ", end='', flush=True)
+            try:
+                formated_response = self.motor_commands.format_response(response)
+                print(f"\n{formated_response}")
+            except Exception as e:
+                print(f"Error formatting response: {e}")
 
     def _handle_command(self, command: str) -> None:
         """Handle the command"""
@@ -214,8 +217,7 @@ class MotorController:
             parameter = parts[2]
             value = int(parts[3])
 
-            response = self.motor_commands.set_parameter(motor_id, parameter, value)
-            self._handle_response(response)
+            self.motor_commands.set_parameter(motor_id, parameter, value)
             self.show_response = False
 
         elif cmd == 'get':
@@ -225,8 +227,8 @@ class MotorController:
                 return
             motor_id = int(parts[1])
             parameter = parts[2]
-            response = self.motor_commands.get_parameter(motor_id, parameter)
-            self._handle_response(response)
+            self.motor_commands.get_parameter(motor_id, parameter)
+            time.sleep(0.1)
             self.show_response = False
 
         elif cmd == 'online':
@@ -236,6 +238,7 @@ class MotorController:
                 return
             motor_id = int(parts[1], 16)
             self.motor_commands.iap_update(motor_id)
+            time.sleep(0.1)
             self.show_response = False
 
         elif cmd == 'state':
@@ -244,8 +247,8 @@ class MotorController:
                 print("Usage: state <motor_id>")
                 return
             motor_id = int(parts[1], 16)
-            response = self.motor_commands.get_current_state(motor_id)
-            self._handle_response(response)
+            self.motor_commands.get_current_state(motor_id)
+            time.sleep(0.1)
             self.show_response = False
 
         elif cmd == 'parameters':

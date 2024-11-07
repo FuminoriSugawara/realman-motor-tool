@@ -6,15 +6,19 @@ from dataclasses import dataclass
 
 @dataclass
 class CommonResponseMessage:
-    command_id: int
+    message_type: int
     module_id: int
     timestamp: float
     data: bytes
+    command: int
+    operation_type: int
+    value: int
+    unit: str
 
 
 @dataclass
 class ServoResponseMessage:
-    command_id: int
+    message_type: int
     module_id: int
     timestamp: float
     current: int
@@ -25,7 +29,7 @@ class ServoResponseMessage:
 
 @dataclass
 class CommonCommandMessage:
-    command_id: int
+    message_type: int
     module_id: int
     timestamp: float
     data: bytes
@@ -33,21 +37,21 @@ class CommonCommandMessage:
 
 @dataclass
 class ControlCommandMessage:
-    command_id: int
+    message_type: int
     module_id: int
     timestamp: float
     value: int
 
 @dataclass
 class DebugMessage:
-    command_id: int
+    message_type: int
     module_id: int
     timestamp: float
     data: bytes
 
 @dataclass
 class JointStateResponseMessage:
-    command_id: int
+    message_type: int
     module_id: int
     timestamp: float
     error_code: int
@@ -78,7 +82,7 @@ class ServoMode(IntEnum):
     VEL = 0x02  # 速度制御
     POS = 0x03  # 位置制御
 
-class CommandType(IntEnum):
+class CommandOperationType(IntEnum):
     CMD_RD = 0x01  # 読み込み
     CMD_WR = 0x02  # 書き込み
 
@@ -329,7 +333,7 @@ class MotorCommands:
 
 
     
-    def decode_response(self, msg: can.Message) -> Dict:
+    def decode_response(self, msg: can.Message) -> Dict | CommonCommandMessage | ControlCommandMessage | DebugMessage | JointStateResponseMessage | ServoResponseMessage | CommonResponseMessage:
         """Decode response message
         
         Args:
@@ -341,24 +345,23 @@ class MotorCommands:
         try:
             message_type = msg.arbitration_id & 0x0F00
             module_id = msg.arbitration_id & 0xFF
-            response_data = {}
 
             if message_type == ResponseMessageType.COMMON:
-                response_data = self._decode_common_response(msg)
+                return self._decode_common_response(msg)
             elif message_type == ResponseMessageType.SERVO:
-                response_data = self._decode_servo_response(msg)
+                return self._decode_servo_response(msg)
             elif message_type == ResponseMessageType.JSTATE:
-                response_data = self._decode_joint_state_response(msg)
+                return self._decode_joint_state_response(msg)
             elif message_type == ResponseMessageType.DEBUG:
-                response_data = self._decode_debug_response(msg)
+                return self._decode_debug_response(msg)
             elif message_type == CommandMessageType.COMMON:
-                response_data = self._decode_common_command(msg)
+                return self._decode_common_command(msg)
             elif message_type == CommandMessageType.SERVO_POS:
-                response_data = self._decode_control_command(msg)
+                return self._decode_control_command(msg)
             elif message_type == CommandMessageType.SERVO_VEL:
-                response_data = self._decode_control_command(msg)
+                return self._decode_control_command(msg)
             elif message_type == CommandMessageType.SERVO_CUR:
-                response_data = self._decode_control_command(msg)
+                return self._decode_control_command(msg)
             else:
                 print(f"Unknown response type: {message_type:02X}")
                 return {
@@ -366,12 +369,6 @@ class MotorCommands:
                     'module_id': module_id,
                     'data': {'error': 'Unknown response type'}
                 }
-            
-            return {
-                'type': message_type,
-                'module_id': module_id,
-                'data': response_data
-            }
         except Exception as e:
             print(f"Error decoding response: {e}")
             return {
@@ -382,7 +379,7 @@ class MotorCommands:
 
 
 
-    def _decode_common_response(self, data: bytes) -> Dict:
+    def _decode_common_response(self, message: can.Message) -> CommonResponseMessage:
         """Decode common command response
         
         Args:
@@ -391,14 +388,18 @@ class MotorCommands:
         Returns:
             Dictionary containing decoded common response data
         """
-        command_type = data[0]
+        message_type = message.arbitration_id & 0xFF00
+        module_id = message.arbitration_id & 0xFF
+        data = message.data
+        timestamp = message.timestamp
+
+        operation_type = data[0]
         command_index = data[1]
-        params = data[2:]
         value_raw = int.from_bytes(data[2:], byteorder='little', signed=True)
         value = value_raw
         unit = None
 
-        if command_type == CommandType.CMD_RD:
+        if operation_type == CommandOperationType.CMD_RD:
             if command_index == CommandIndex.SYS_VOLTAGE:
                 value = value_raw * UnitScaleFactor.VOLTAGE
                 unit = "V"
@@ -423,16 +424,17 @@ class MotorCommands:
             elif command_index == CommandIndex.TAG_POSITION_L:
                 value = value_raw * UnitScaleFactor.POSITION
                 unit = "deg"
-        elif command_type == CommandType.CMD_WR:
-            print(f"Write response: {data}")
-
-        return {
-                'command': command_index,
-                'params': params,
-                'value': value,
-                'unit': unit
-                }
-
+        
+        return CommonResponseMessage(
+            message_type=message_type,
+            module_id=module_id,
+            timestamp=timestamp,
+            data=data,
+            command=command_index,
+            operation_type=operation_type,
+            value=value,
+            unit=unit
+        )
 
         
 
@@ -445,7 +447,7 @@ class MotorCommands:
         Returns:
             Dictionary containing decoded servo response data
         """
-        command_id = message.arbitration_id & 0xFF00
+        message_type = message.arbitration_id & 0xFF00
         module_id = message.arbitration_id & 0xFF
         data = message.data
         current = self.parse_int32(data[0:4])
@@ -453,16 +455,27 @@ class MotorCommands:
         position = self.parse_int32(data[8:12])
         error = self.parse_uint16(data[14:16])
 
-        return ServoResponseMessage(command_id, module_id, message.timestamp, current, velocity, position, error)
+        return ServoResponseMessage(
+            message_type=message_type,
+            module_id=module_id,
+            current=current,
+            velocity=velocity,
+            position=position,
+            error=error
+        )
         
 
 
 
-    def _decode_joint_state_response(self, data: bytes) -> JointStateResponseMessage:
+    def _decode_joint_state_response(self, message: can.Message) -> JointStateResponseMessage:
         """Decode joint state response"""
-        if len(data) != 16:
+        if len(message.data) != 16:
             return {'error': 'Invalid data length'}
         
+        message_type = message.arbitration_id & 0xFF00
+        module_id = message.arbitration_id & 0xFF
+        timestamp = message.timestamp
+        data = message.data
         error_code = int.from_bytes(data[0:2], byteorder='little', signed=False)
         voltage_raw = int.from_bytes(data[2:4], byteorder='little', signed=False)
         temp_raw = int.from_bytes(data[4:6], byteorder='little', signed=False)
@@ -473,6 +486,9 @@ class MotorCommands:
 
 
         return JointStateResponseMessage(
+            message_type=message_type,
+            module_id=module_id,
+            timestamp=timestamp,
             error_code=error_code,
             system_voltage=voltage_raw * UnitScaleFactor.VOLTAGE,
             system_temperature=temp_raw * UnitScaleFactor.TEMPERATURE,
@@ -494,13 +510,13 @@ class MotorCommands:
         Returns:
             Dictionary containing decoded debug data
         """
-        command_id = message.arbitration_id & 0xFF00
+        message_type = message.arbitration_id & 0xFF00
         module_id = message.arbitration_id & 0xFF
         data = message.data
         timestamp = message.timestamp
 
         return DebugMessage(
-            command_id= command_id,
+            message_type= message_type,
             module_id= module_id,
             timestamp= timestamp,
             data= data)
@@ -508,13 +524,13 @@ class MotorCommands:
     
     def _decode_common_command(self, message: can.Message) -> CommonCommandMessage:
         """Decode common command message"""
-        command_id = message.arbitration_id & 0xFF00
+        message_type = message.arbitration_id & 0x0F00
         module_id = message.arbitration_id & 0x00FF
         timestamp = message.timestamp
         data = message.data
 
         return CommonCommandMessage(
-            command_id= command_id,
+            message_type= message_type,
             module_id= module_id,
             timestamp= timestamp,
             data= data)
@@ -522,13 +538,13 @@ class MotorCommands:
     
     def _decode_control_command(self, message: can.Message) -> ControlCommandMessage:
         """Decode servo position message"""
-        command_id = message.arbitration_id & 0xFF00
+        message_type = message.arbitration_id & 0x0F00
         module_id = message.arbitration_id & 0x00FF
         timestamp = message.timestamp
         value = self.parse_int32(message.data)
 
         return ControlCommandMessage(
-            command_id= command_id,
+            message_type= message_type,
             module_id= module_id,
             timestamp= timestamp,
             value= value)
@@ -536,7 +552,7 @@ class MotorCommands:
 
 
 
-    def format_response(self, response: Dict) -> str:
+    def format_response(self, response: CommonCommandMessage | ControlCommandMessage | DebugMessage | JointStateResponseMessage | ServoResponseMessage | CommonResponseMessage) -> str:
         """Format response data as human-readable string
         
         Args:
@@ -546,52 +562,78 @@ class MotorCommands:
             Formatted string representation of the response
         """
 
+        module_id = response.module_id
+        timestamp = response.timestamp
+
         output = [
             "\n=== Motor Response ===",
-            f"Module ID: 0x{response['module_id']:02X}",
-            #f"Message Type: {ResponseMessageType(response['type']).name} (0x{response['type']:03X})"
+            f"Module ID: 0x{module_id:02X}",
+            f"Timestampe: {timestamp}",
         ]
-
-        data = response['data']
-        if response['type'] == ResponseMessageType.COMMON:
-            command_name = CommandIndex(data['command']).name if data['command'] is not None else None
-            command_index = data['command']
-            value = data['value'] if 'value' in data else None
-            unit = data['unit'] if 'unit' in data else None
+        message_type = response.message_type
+        #data = response['data']
+        data = {}
+        if isinstance(response, CommonResponseMessage):
+            command = response.command
+            command_name = CommandIndex(command).name if command is not None else None
+            message_type = response.message_type
+            value = response.value
+            unit = response.unit
             output.extend([
-                f"Message Type: {ResponseMessageType(response['type']).name} (0x{response['type']:03X})",
-                f"Command: {command_name} (0x{command_index:02X})" if command_name is not None else "",
-                f"Parameters: {[hex(x) for x in data['params']]}" if data['params'] is not None else "",
+                f"Message Type: {ResponseMessageType(message_type).name} (0x{message_type:03X})",
+                f"Command: {command_name} (0x{command:02X})" if command_name is not None else "",
                 f"Value: {value}" if value is not None else "",
                 f"Unit: {unit}" if unit is not None else ""
             ])
-        elif response['type'] == ResponseMessageType.SERVO:
+        elif isinstance(response, ServoResponseMessage):
+            message_type = response.message_type
+            current = response.current
+            velocity = response.velocity
+            position = response.position
+            error = response.error
+
             output.extend([
-                f"Message Type: {ResponseMessageType(response['type']).name} (0x{response['type']:03X})",
-                f"Servo Mode: {data['servo_mode'].name}" if data['servo_mode'] is not None else "",
-                f"Parameters: {[hex(x) for x in data['params']]}" if data['params'] is not None else ""
+                f"Message Type: {ResponseMessageType(message_type).name} (0x{message_type:03X})",
+                f"Current: {current} mA",
+                f"Velocity: {velocity} RPM",
+                f"Position: {position} deg",
+                f"Error: {error}"
             ])
-        elif response['type'] == ResponseMessageType.JSTATE:
+        elif isinstance(response, JointStateResponseMessage):
+            message_type = response.message_type
+            error_code = response.error_code
+            system_voltage = response.system_voltage
+            system_temperature = response.system_temperature
+            enable_state = response.enable_state
+            brake_state = response.brake_state
+            position = response.position
+            current = response.current
+
             output.extend([
-                f"Message Type: {ResponseMessageType(response['type']).name} (0x{response['type']:03X})",
-                f"Error Code: 0x{data['error_code']:02X}",
-                f"Voltage: {data['system_voltage']:.2f} V",
-                f"Temperature: {data['system_temperature']:.1f} °C",
-                f"Enable State: {data['enable_state']}",
-                f"Brake State: {data['brake_state']}",
-                f"Position: {data['position']:.4f} deg",
-                f"Current: {data['current']:.1f} mA"
+                f"Message Type: {ResponseMessageType(message_type).name} (0x{message_type:03X})",
+                f"Error Code: 0x{error_code:02X}",
+                f"System Voltage: {system_voltage:.2f} V",
+                f"System Temperature: {system_temperature:.1f} °C",
+                f"Enable State: {enable_state}",
+                f"Brake State: {brake_state}",
+                f"Position: {position:.4f} deg",
+                f"Current: {current:.1f} mA"
             ])
-        elif response['type'] == CommandMessageType.COMMON:
+        elif isinstance(response, DebugMessage):
+            message_type = response.message_type
+            data = response.data
+
             output.extend([
-                f"Message Type: {CommandMessageType(response['type']).name} (0x{response['type']:03X})",
-                f"Command: {data['command']}",
-                f"Parameters: {[hex(x) for x in data['params']]}"
+                f"Message Type: {ResponseMessageType(message_type).name} (0x{message_type:03X})",
+                f"Data: {data}"
             ])
-        elif response['type'] == CommandMessageType.SERVO_POS:
+        elif isinstance(response, ControlCommandMessage):
+            message_type = response.message_type
+            value = response.value
+            
             output.extend([
-                f"Message Type: {CommandMessageType(response['type']).name} (0x{response['type']:03X})",
-                f"Parameters: {[hex(x) for x in data['params']]}"
+                f"Message Type: {ResponseMessageType(message_type).name} (0x{message_type:03X})",
+                f"Value: {value}"
             ])
 
         #output = [line for line in output if line]  # Remove empty lines
@@ -621,7 +663,7 @@ class MotorCommands:
         """IAP update"""
         command_id = CommandMessageType.COMMON | module_id
         data = [
-            CommandType.CMD_WR,
+            CommandOperationType.CMD_WR,
             CommandIndex.IAP_FLAG,
             0x00]
         self.send_message(command_id, data)
@@ -652,7 +694,7 @@ class MotorCommands:
         command_id = CommandMessageType.COMMON | module_id
         
         data = [
-            CommandType.CMD_RD,
+            CommandOperationType.CMD_RD,
             command_index,
             size
         ]
@@ -676,7 +718,7 @@ class MotorCommands:
         command_id = CommandMessageType.COMMON | module_id
 
         data = [
-            CommandType.CMD_WR,
+            CommandOperationType.CMD_WR,
             command_index,
         ]
 
