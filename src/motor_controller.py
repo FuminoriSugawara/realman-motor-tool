@@ -218,6 +218,7 @@ class MotorController:
             value = int(parts[3])
 
             self.motor_commands.set_parameter(motor_id, parameter, value)
+            time.sleep(0.1)
             self.show_response = False
 
         elif cmd == 'get':
