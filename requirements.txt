@@ -1,2 +1,5 @@
 python-can
 prompt_toolkit
+numpy>=2.1.0
+pandas>=2.1.0
+matplotlib>=3.8.0

@@ -733,7 +733,10 @@ class MotorCommands:
 
 
     def set_parameter(self, module_id: int, parameter: str, value: int) -> Optional[Dict]:
-        size = 1
+        if value < 256:
+            size = 1
+        else:
+            size = 2
         if parameter in FOUR_BYTE_PARAMETERS:
             parameter = parameter + "_L"
             size = 4
