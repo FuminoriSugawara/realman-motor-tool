@@ -106,8 +106,15 @@ class CommandIndex(IntEnum):
     CUR_CURRENT_H = 0x11
     CUR_SPEED_L = 0x12
     CUR_SPEED_H = 0x13
-    CUR_POSITION_L = 0x14
-    CUR_POSITION_H = 0x15
+    CUR_OUT_POSITION_L = 0x14
+    CUR_OUT_POSITION_H = 0x15
+    CUR_MOTOR_POSITION_L = 0x16
+    CUR_MOTOR_POSITION_H = 0x17
+    # Encoder commands
+    ENC_OUT_L = 0x26
+    ENC_OUT_H = 0x27
+    ENC_MOTOR_L = 0x28
+    ENC_MOTOR_H = 0x29
     # Motor model commands
     MOT_MODEL_ID0 = 0x2A
     MOT_MODEL_ID1 = 0x2B
@@ -217,7 +224,10 @@ PARAMETERS = [
     "SYS_CLEAR_ERROR",
     "CUR_CURRENT",
     "CUR_SPEED",
-    "CUR_POSITION",
+    "CUR_OUT_POSITION",
+    "CUR_MOTOR_POSITION",
+    "ENC_OUT",
+    "ENC_MOTOR",
     "MOT_MODEL_ID0",
     "MOT_MODEL_ID1",
     "MOT_MODEL_ID2",
@@ -255,7 +265,10 @@ PARAMETERS = [
 FOUR_BYTE_PARAMETERS = [
     "CUR_CURRENT",
     "CUR_SPEED",
-    "CUR_POSITION",
+    "CUR_OUT_POSITION",
+    "CUR_MOTOR_POSITION",
+    "ENC_OUT",
+    "ENC_MOTOR",
     "TAG_CURRENT",
     "TAG_SPEED",
     "TAG_POSITION",
@@ -278,7 +291,10 @@ PARAMTETER_DESCRIPTIONS = {
     "SYS_CLEAR_ERROR": "Clear error",
     "CUR_CURRENT": "Current (mA)",
     "CUR_SPEED": "Speed (RPM)",
-    "CUR_POSITION": "Position (deg)",
+    "CUR_OUT_POSITION": "Output position (deg)",
+    "CUR_MOTOR_POSITION": "Motor position (deg)",
+    "ENC_OUT": "Encoder count of output shaft",
+    "ENC_MOTOR": "Encoder count of motor shaft",
     "MOT_MODEL_ID0": "Motor model ID 0",
     "MOT_MODEL_ID1": "Motor model ID 1",
     "MOT_MODEL_ID2": "Motor model ID 2",
@@ -376,6 +392,8 @@ class MotorCommands:
                 return self._decode_control_command(msg)
             elif message_type == CommandMessageType.SERVO_CUR:
                 return self._decode_control_command(msg)
+            elif message_type == CommandMessageType.JSTATE:
+                return self._decode_common_command(msg)
             else:
                 print(f"Unknown response type: {message_type:02X}")
                 return {
@@ -439,7 +457,10 @@ class MotorCommands:
             elif command_index == CommandIndex.CUR_SPEED_L:
                 value = value_raw * UnitScaleFactor.ACTUAL_SPEED
                 unit = "RPM"
-            elif command_index == CommandIndex.CUR_POSITION_L:
+            elif command_index == CommandIndex.CUR_OUT_POSITION_L:
+                value = value_raw * UnitScaleFactor.POSITION
+                unit = "deg"
+            elif command_index == CommandIndex.CUR_MOTOR_POSITION_L:
                 value = value_raw * UnitScaleFactor.POSITION
                 unit = "deg"
             elif command_index == CommandIndex.TAG_CURRENT_L:
@@ -701,16 +722,7 @@ class MotorCommands:
     
     def get_parameter(self, module_id: int, parameter: str) -> Optional[Dict]:
         size = 0x01
-        if parameter in [
-            "CUR_CURRENT",
-            "CUR_SPEED",
-            "CUR_POSITION",
-            "TAG_CURRENT",
-            "TAG_SPEED",
-            "TAG_POSITION",
-            "LIT_MIN_POSITION",
-            "LIT_MAX_POSITION"
-        ]:
+        if parameter in FOUR_BYTE_PARAMETERS:
             size = 0x02
             parameter = parameter + "_L"
         
