@@ -27,9 +27,9 @@ MODULE_ID_MASK = 0xFF
 
 motor_model_map: Dict[int, MotorModel] = {
     0x01: MotorModel.WHJ60,
-    0x02: MotorModel.WHJ30,
+    0x02: MotorModel.WHJ60,
     0x03: MotorModel.WHJ30,
-    0x04: MotorModel.WHJ10,
+    0x04: MotorModel.WHJ30,
     0x05: MotorModel.WHJ10,
     0x06: MotorModel.WHJ10,
     0x07: MotorModel.WHJ10,
