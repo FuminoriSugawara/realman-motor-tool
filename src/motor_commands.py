@@ -228,6 +228,7 @@ PARAMETERS = [
     "CUR_MOTOR_POSITION",
     "ENC_OUT",
     "ENC_MOTOR",
+    "ENC_ALL",
     "MOT_MODEL_ID0",
     "MOT_MODEL_ID1",
     "MOT_MODEL_ID2",
@@ -276,6 +277,10 @@ FOUR_BYTE_PARAMETERS = [
     "LIT_MAX_POSITION"
 ]
 
+EIGHT_BYTE_PARAMETERS = [
+    "ENC_ALL",
+]
+
 PARAMTETER_DESCRIPTIONS = {
     "SYS_ID": "System ID",
     "SYS_FW_VERSION": "Firmware version",
@@ -295,6 +300,7 @@ PARAMTETER_DESCRIPTIONS = {
     "CUR_MOTOR_POSITION": "Motor position (deg)",
     "ENC_OUT": "Encoder count of output shaft",
     "ENC_MOTOR": "Encoder count of motor shaft",
+    "ENC_ALL": "Encoder count",
     "MOT_MODEL_ID0": "Motor model ID 0",
     "MOT_MODEL_ID1": "Motor model ID 1",
     "MOT_MODEL_ID2": "Motor model ID 2",
@@ -725,6 +731,10 @@ class MotorCommands:
         if parameter in FOUR_BYTE_PARAMETERS:
             size = 0x02
             parameter = parameter + "_L"
+
+        if parameter in EIGHT_BYTE_PARAMETERS:
+            size = 0x05
+            parameter = "ENC_OUT_L"
         
         # CommandIndexからparameterを取得
         command_index = getattr(CommandIndex, parameter)
@@ -752,6 +762,10 @@ class MotorCommands:
         if parameter in FOUR_BYTE_PARAMETERS:
             parameter = parameter + "_L"
             size = 4
+
+        if parameter in EIGHT_BYTE_PARAMETERS:
+            parameter = "ENC_OUT_L"
+            size = 8
         
         # CommandIndexからparameterを取得
         command_index = getattr(CommandIndex, parameter)
